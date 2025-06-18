@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.omniseek" path="/org/gnome/shell/extensions/omniseek/">
+    <key name="providers-json" type="s">
+      <default>"[{\"name\": \"Google\", \"shortcut\": \"g\", \"url\": \"https://www.google.com/search?q=%s\", \"suggest\": \"https://suggestqueries.google.com/complete/search?client=firefox&amp;q=%s\", \"icon\": \"google.svg\"}, {\"name\": \"Brave Search\", \"shortcut\": \"br\", \"url\": \"https://search.brave.com/search?q=%s\", \"suggest\": \"https://search.brave.com/api/suggest?q=%s\", \"icon\": \"brave.svg\"}, {\"name\": \"DuckDuckGo\", \"shortcut\": \"ddg\", \"url\": \"https://duckduckgo.com/?q=%s\", \"suggest\": \"https://duckduckgo.com/ac/?q=%s&amp;type=list\", \"icon\": \"duckduckgo.svg\"}, {\"name\": \"Bing\", \"shortcut\": \"b\", \"url\": \"https://www.bing.com/search?q=%s\", \"suggest\": \"https://api.bing.com/osjson.aspx?query=%s\", \"icon\": \"bing.svg\"}, {\"name\": \"Startpage\", \"shortcut\": \"sp\", \"url\": \"https://www.startpage.com/search?q=%s\", \"suggest\": null, \"icon\": \"startpage.svg\"}, {\"name\": \"Qwant\", \"shortcut\": \"q\", \"url\": \"https://www.qwant.com/?q=%s\", \"suggest\": null, \"icon\": \"qwant.svg\"}, {\"name\": \"Reddit\", \"shortcut\": \"r\", \"url\": \"https://www.reddit.com/search/?q=%s\", \"suggest\": null, \"icon\": \"reddit.svg\"}, {\"name\": \"Spotify\", \"shortcut\": \"s\", \"url\": \"https://open.spotify.com/search/%s\", \"suggest\": null, \"icon\": \"spotify.svg\"}, {\"name\": \"YouTube\", \"shortcut\": \"y\", \"url\": \"https://www.youtube.com/results?search_query=%s\", \"suggest\": \"https://suggestqueries.google.com/complete/search?client=firefox&amp;ds=yt&amp;q=%s\", \"icon\": \"youtube.svg\"}, {\"name\": \"YouTube Music\", \"shortcut\": \"ym\", \"url\": \"https://music.youtube.com/search?q=%s\", \"suggest\": \"https://suggestqueries.google.com/complete/search?client=firefox&amp;ds=yt&amp;q=%s\", \"icon\": \"ytmusic.svg\"}, {\"name\": \"Wikipedia\", \"shortcut\": \"w\", \"url\": \"https://en.wikipedia.org/wiki/Special:Search/%s\", \"suggest\": \"https://en.wikipedia.org/w/api.php?action=opensearch&amp;format=json&amp;search=%s\", \"icon\": \"wikipedia.svg\"}, {\"name\": \"ChatGPT\", \"shortcut\": \"c\", \"url\": \"https://chat.openai.com/?q=%s\", \"suggest\": null, \"icon\": \"chatgpt.svg\"}]"</default>
+      <summary>Providers JSON</summary>
+      <description>Search providers configuration</description>
+    </key>
+    <key name="api-keys" type="a{ss}">
+      <default>{}</default>
+      <summary>API Keys</summary>
+      <description>API keys for various services (optional)</description>
+    </key>
+  </schema>
+</schemalist>

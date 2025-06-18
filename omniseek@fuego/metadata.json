@@ -1,0 +1,12 @@
+{
+    "uuid": "omniseek@fuego",
+    "name": "OmniSeek",
+    "description": "Keyword search with icons & live suggestions",
+    "shell-version": [
+        "48",
+        "49",
+        "50"
+    ],
+    "version": 7,
+    "settings-schema": "org.gnome.shell.extensions.omniseek"
+}
