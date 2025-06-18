@@ -11,9 +11,21 @@ OmniSeek is a GNOME Shell extension that brings powerful, keyword-based search t
 - Works with GNOME Shell 48+
 
 ## Installation
+### Method 1: Direct Download
+1. Download the latest release from [GitHub Releases](https://github.com/fuegocoding/omniseek/releases)
+2. Extract the downloaded zip file to `~/.local/share/gnome-shell/extensions/omniseek@fuego`
+3. Restart GNOME Shell:
+   - Press `Alt+F2`, type `r`, and press Enter (on X11), or log out and back in (on Wayland)
+4. Enable the extension:
+   - Use GNOME Extensions app or run:
+     ```sh
+     gnome-extensions enable omniseek@fuego
+     ```
+
+### Method 2: Manual Installation
 1. **Clone or Download** this repository to your local machine:
    ```sh
-   git clone <repo-url> ~/.local/share/gnome-shell/extensions/omniseek@fuego
+   git clone https://github.com/fuegocoding/omniseek.git ~/.local/share/gnome-shell/extensions/omniseek@fuego
    ```
    Or copy the files into `~/.local/share/gnome-shell/extensions/omniseek@fuego`.
 
