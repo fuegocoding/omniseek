@@ -1,87 +1,196 @@
-# OmniSeek - GNOME Shell Extension
+# OmniSeek GNOME Shell Extension
 
-A powerful search extension for GNOME Shell that allows you to search across multiple providers using keyboard shortcuts.
+## Overview
+OmniSeek is a GNOME Shell extension that brings powerful, keyword-based search to your desktop. With support for multiple search providers, live suggestions with Google fallback, and customizable icons, you can quickly search the web or your favorite services directly from the GNOME overview.
 
 ## Features
+- **Keyword-based search shortcuts** (e.g., `g linux` for Google, `y music` for YouTube)
+- **Live search suggestions** for all providers with intelligent fallback system
+- **Google fallback suggestions** for providers without native suggestion APIs
+- **12 built-in search providers** covering search engines, media, social, and AI platforms
+- **Customizable search providers** - add, remove, edit, and reorder providers
+- **Modern preferences window** for easy configuration with GTK4/Libadwaita
+- **Works with GNOME Shell 48+**
 
-- **Keyword-based search**: Type a shortcut followed by your query
-- **Live suggestions**: Get real-time search suggestions from supported providers
-- **Multiple providers**: Support for Google, Brave, DuckDuckGo, Bing, YouTube, Wikipedia, and more
-- **Customizable**: Add, remove, or modify search providers
+## Default Search Providers
 
-## How to Use
+### Search Engines
+- **Google** (`g`) - Own suggestion API
+- **Brave Search** (`br`) - Google fallback suggestions
+- **DuckDuckGo** (`ddg`) - Google fallback suggestions  
+- **Bing** (`b`) - Own suggestion API
+- **Startpage** (`sp`) - Google fallback suggestions
+- **Qwant** (`q`) - Google fallback suggestions
 
-1. Open GNOME Shell's search (Super key or click Activities)
-2. Type a provider shortcut followed by your search query
-3. Press Enter to search or select a suggestion
+### Media & Entertainment
+- **YouTube** (`y`) - YouTube suggestion API
+- **YouTube Music** (`ym`) - YouTube suggestion API
+- **Spotify** (`s`) - Google fallback suggestions
 
-### Available Shortcuts
+### Information & Social
+- **Wikipedia** (`w`) - Wikipedia OpenSearch API
+- **Reddit** (`r`) - Google fallback suggestions
 
-- `goog` - Google
-- `br` - Brave Search
-- `ddg` - DuckDuckGo
-- `bing` - Bing
-- `sp` - Startpage
-- `q` - Qwant
-- `r` - Reddit
-- `spt` - Spotify
-- `y` - YouTube
-- `ytm` - YouTube Music
-- `w` - Wikipedia
-- `c` - ChatGPT
-
-### Examples
-
-- `goog linux` - Search Google for "linux"
-- `y music` - Search YouTube for "music"
-- `w python` - Search Wikipedia for "python"
-- `spt rock` - Search Spotify for "rock"
+### AI Assistants
+- **ChatGPT** (`gpt`) - Google fallback suggestions, supports URL queries
 
 ## Installation
 
-1. Download and extract the extension to `~/.local/share/gnome-shell/extensions/omniseek@fuego`
-2. Restart GNOME Shell or log out and back in
-3. Enable the extension using GNOME Extensions app or `gnome-extensions enable omniseek@fuego`
+### Method 1: Direct Download
+1. Download the latest release from [GitHub Releases](https://github.com/fuegocoding/omniseek/releases)
+2. Extract the downloaded zip file to `~/.local/share/gnome-shell/extensions/omniseek@fuego`
+3. **Compile the GSettings schema:**
+   ```bash
+   glib-compile-schemas ~/.local/share/gnome-shell/extensions/omniseek@fuego/schemas
+   ```
+4. **Restart GNOME Shell:**
+   - Press `Alt+F2`, type `r`, and press Enter (on X11), or log out and back in (on Wayland)
+5. **Enable the extension:**
+   - Use GNOME Extensions app or run:
+     ```bash
+     gnome-extensions enable omniseek@fuego
+     ```
+
+### Method 2: Manual Installation
+1. **Clone or Download** this repository to your local machine:
+   ```bash
+   git clone https://github.com/fuegocoding/omniseek.git ~/.local/share/gnome-shell/extensions/omniseek@fuego
+   ```
+   Or copy the files into `~/.local/share/gnome-shell/extensions/omniseek@fuego`.
+
+2. **Compile the GSettings schema:**
+   ```bash
+   glib-compile-schemas ~/.local/share/gnome-shell/extensions/omniseek@fuego/schemas
+   ```
+
+3. **Restart GNOME Shell:**
+   - Press `Alt+F2`, type `r`, and press Enter (on X11), or log out and back in (on Wayland).
+
+4. **Enable the extension:**
+   - Use GNOME Extensions app or run:
+     ```bash
+     gnome-extensions enable omniseek@fuego
+     ```
+
+## Usage
+
+### Basic Search
+- Open the GNOME overview (press `Super`/`Windows` key)
+- Type a provider shortcut followed by your query (e.g., `g cats`)
+- Select a suggestion or press Enter to search
+
+### Example Searches
+- `g linux commands` → Google search with live suggestions
+- `y python tutorial` → YouTube search with video suggestions  
+- `ddg privacy tools` → DuckDuckGo search with Google fallback suggestions
+- `w quantum physics` → Wikipedia search with article suggestions
+- `gpt explain javascript` → ChatGPT with query parameter
+- `s jazz music` → Spotify search with Google fallback suggestions
+- `r programming` → Reddit search with Google fallback suggestions
+
+## Live Search Suggestions
+
+OmniSeek provides intelligent live search suggestions through multiple methods:
+
+### Native Suggestion APIs
+- **Google, Bing** - Own suggestion services
+- **YouTube, YouTube Music** - Google's YouTube suggestion API
+- **Wikipedia** - Wikipedia's OpenSearch API
+
+### Google Fallback System
+For providers without reliable suggestion APIs, OmniSeek automatically uses Google's suggestion service as a fallback:
+- **Brave Search, DuckDuckGo** - Use Google fallback for reliable suggestions
+- **ChatGPT, Reddit, Spotify, Startpage, Qwant** - Use Google fallback suggestions
+
+This ensures that **all providers get live search suggestions**, making the search experience consistent and helpful across all services.
+
+## Configuration
+
+### Opening Preferences
+- Open the extension preferences via the GNOME Extensions app
+- Or run: `gnome-extensions prefs omniseek@fuego`
+
+### Managing Providers
+- **Add new providers** - Click the "+" button to add custom search providers
+- **Edit providers** - Click on any provider to expand and edit its details
+- **Remove providers** - Click the trash icon to delete unwanted providers
+- **Reorder providers** - Use the reorder button to change provider order
+
+### Provider Settings
+Each provider can be configured with:
+- **Name** - Display name for the provider
+- **Shortcut** - Keyword trigger (e.g., `g`, `ddg`, `yt`)
+- **Search URL** - URL template with `%s` placeholder for queries
+- **Suggestions URL** - Optional suggestion API URL (leave empty for Google fallback)
+- **Icon** - Icon file name (should be in the `icons/` directory)
+
+### Adding Custom Providers
+1. Click the "+" button in preferences
+2. Set a unique shortcut (e.g., `gh` for GitHub)
+3. Enter the search URL with `%s` placeholder (e.g., `https://github.com/search?q=%s`)
+4. Leave suggestions URL empty to use Google fallback
+5. Choose an icon file or leave default
+
+## Compatibility
+- **GNOME Shell 48+** (tested on 48, 49, 50)
+- Requires **GJS with ES module support**
+- Uses **GTK4/Libadwaita** for preferences
+- **Wayland and X11** compatible
 
 ## Troubleshooting
 
-### Extension not working?
+### Extension Not Loading
+- Ensure the schema is compiled: `glib-compile-schemas ~/.local/share/gnome-shell/extensions/omniseek@fuego/schemas`
+- Restart GNOME Shell: `Alt+F2` → `r` → Enter (X11) or log out/in (Wayland)
+- Check if your GNOME version is supported (48+)
 
-1. Check if the extension is enabled: `gnome-extensions show omniseek@fuego`
-2. Restart GNOME Shell: `killall -3 gnome-shell`
-3. Check logs: `journalctl --user -f | grep omniseek`
+### No Search Suggestions
+- Check logs: `journalctl /usr/bin/gnome-shell -f`
+- Verify network connectivity
+- Try using a provider with native suggestions (like Google) to test
 
-### Search providers not working?
+### Settings Page Errors
+- If you get GObject registration errors, restart GNOME Shell
+- Ensure you're using the latest version of the extension files
+- Check that all files are properly copied to the extension directory
 
-1. Open the extension preferences
-2. Check that the provider URLs are correct
-3. Some providers may have rate limits or require API keys
+### Provider Not Working
+- Verify the search URL format includes `%s` placeholder
+- Test the URL manually in a browser by replacing `%s` with a test query
+- Check that the shortcut doesn't conflict with existing shortcuts
 
-### Suggestions not working?
+### Debugging
+Check extension logs for detailed error information:
+```bash
+journalctl /usr/bin/gnome-shell -f | grep OmniSeek
+```
 
-1. Check your internet connection
-2. Some providers may block automated requests
-3. Try using a different provider
+## Recent Updates
 
-## Recent Fixes
+### Version 7 Changes
+- **Improved live suggestions** with intelligent Google fallback system
+- **Removed problematic providers** (Claude AI, Gemini) that don't support URL queries
+- **Fixed DuckDuckGo and Brave** suggestions by implementing Google fallback
+- **Enhanced preferences interface** with better error handling and GObject management
+- **Simplified suggestion parsing** for better reliability across all providers
+- **Better debugging** with comprehensive logging for troubleshooting
 
-- Fixed GObject registration error that prevented preferences from opening
-- Removed incorrect Spotify API implementation
-- Added support for all 12 default providers
-- Improved error handling and logging
-- Enhanced User-Agent strings for better compatibility
-- Added comprehensive shortcuts list in preferences
-- Fixed suggestion parsing for various providers
+## Contributing
 
-## Development
-
-The extension is written in JavaScript using GNOME Shell's extension API. Key files:
-
-- `extension.js` - Main extension logic
-- `prefs.js` - Preferences dialog
-- `metadata.json` - Extension metadata
-- `schemas/` - GSettings schema
+Contributions are welcome! Please feel free to:
+- Report bugs and issues
+- Suggest new search providers
+- Submit pull requests with improvements
+- Help with translations
 
 ## License
 
-This extension is open source and available under the GPL license. 
+MIT License. See `LICENSE` file for details.
+
+## Support
+
+If you encounter issues:
+1. Check the troubleshooting section above
+2. Look at logs using `journalctl /usr/bin/gnome-shell -f`
+3. Report issues on the GitHub repository
+4. Include your GNOME Shell version and extension logs when reporting bugs
