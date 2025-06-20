@@ -24,55 +24,6 @@ function urlencode(str) {
     return encodeURIComponent(str).replace(/'/g, '%27').replace(/"/g, '%22');
 }
 
-async function fetchSuggestions(url) {
-    return new Promise(resolve => {
-        const msg = Soup.Message.new('GET', url);
-        msg.request_headers.append('User-Agent', 'Mozilla/5.0');
-        msg.request_headers.append('Accept', 'application/json');
-        session.send_and_read_async(msg, 10000, null, (sess, res) => {
-            try {
-                const data = JSON.parse(sess.send_and_read_finish(res).get_data().toString());
-                resolve(data);
-            } catch (e) {
-                log(`Error fetching suggestions: ${e}`);
-                resolve([]);
-            }
-        });
-    });
-}
-
-async function fetchThumbnail(url) {
-    return new Promise(resolve => {
-        const msg = Soup.Message.new('GET', url);
-        msg.request_headers.append('User-Agent', 'Mozilla/5.0');
-        session.send_and_read_async(msg, 10000, null, (sess, res) => {
-            try {
-                const bytes = sess.send_and_read_finish(res).get_data();
-                const gicon = Gio.BytesIcon.new(new GLib.Bytes(bytes));
-                resolve(gicon);
-            } catch (e) {
-                log(`Error fetching thumbnail: ${e}`);
-                resolve(null);
-            }
-        });
-    });
-}
-
-// Cache for thumbnails
-const thumbnailCache = new Map();
-
-async function getThumbnail(url) {
-    if (!url) return null;
-    if (thumbnailCache.has(url)) {
-        return thumbnailCache.get(url);
-    }
-    const thumbnail = await fetchThumbnail(url);
-    if (thumbnail) {
-        thumbnailCache.set(url, thumbnail);
-    }
-    return thumbnail;
-}
-
 class OmniProvider {
     constructor(settings, iconsDir) {
         this.id = 'OmniSeek';
@@ -81,20 +32,38 @@ class OmniProvider {
         this.appInfo = null;
         this._settings = settings;
         this._iconsDir = iconsDir;
+        this._suggestionCache = new Map();
         this.reload();
     }
+
     reload() {
         try {
             this._providers = JSON.parse(this._settings.get_string('providers-json'));
+            
+            // Validate that we have the expected providers
+            if (!this._providers || this._providers.length === 0) {
+                log('[OmniSeek] No providers found, this should not happen');
+                return;
+            }
+            
+            // Log loaded providers for debugging
+            log(`[OmniSeek] Loaded ${this._providers.length} providers: ${this._providers.map(p => p.name).join(', ')}`);
         } catch (e) {
-            log(`Error parsing providers: ${e}`);
+            log(`[OmniSeek] Error parsing providers: ${e}`);
             this._providers = [];
         }
+        
         this._map = {};
         for (const p of this._providers) {
-            this._map[p.shortcut] = p;
+            if (p.shortcut && p.shortcut.trim()) {
+                this._map[p.shortcut] = p;
+            }
         }
+        
+        // Clear suggestion cache when reloading
+        this._suggestionCache.clear();
     }
+
     _parse(terms) {
         if (!terms || terms.length < 2) return null;
         const prov = this._map[terms[0]];
@@ -102,135 +71,128 @@ class OmniProvider {
         const query = terms.slice(1).join(' ');
         return query ? { provider: prov, query } : null;
     }
-    async _suggest(match) {
-        const p = match.provider;
-        log(`[OmniSeek] _suggest called for provider: ${p.name}, query: ${match.query}`);
-        if (!p.suggest) return [];
+
+    _getSuggestionUrl(provider, query) {
+        // Use provider's suggestion URL if available, otherwise fall back to Google
+        let suggestUrl = provider.suggest;
+        
+        if (!suggestUrl || suggestUrl.trim() === '') {
+            // Use Google suggestions as fallback
+            suggestUrl = 'https://suggestqueries.google.com/complete/search?client=firefox&q=%s';
+        }
+        
+        return suggestUrl.replace('%s', urlencode(query));
+    }
+
+    _parseSuggestions(data, providerIcon) {
+        let suggestions = [];
+        
         try {
-            const raw = await fetchSuggestions(p.suggest.replace('%s', urlencode(match.query)));
-            log(`[OmniSeek] Raw suggestions for ${p.name}: ${JSON.stringify(raw)}`);
-            let suggestions = [];
-            switch (p.icon) {
-                case 'google.svg':
-                case 'youtube.svg':
-                case 'ytmusic.svg':
-                    suggestions = Array.isArray(raw) && Array.isArray(raw[1]) ? raw[1] : [];
-                    break;
-                case 'brave.svg':
-                    suggestions = Array.isArray(raw) ? raw.map(s => s.query || s) : [];
-                    break;
-                case 'duckduckgo.svg':
-                    suggestions = Array.isArray(raw) ? raw.map(s => s.phrase || s) : [];
-                    break;
-                case 'wikipedia.svg':
-                    suggestions = Array.isArray(raw) && Array.isArray(raw[1]) ? raw[1] : [];
-                    break;
-                default:
-                    suggestions = Array.isArray(raw) ? 
-                        (Array.isArray(raw[1]) ? raw[1] : 
-                            (raw.map(s => typeof s === 'string' ? s : (s.phrase || s.query || s)))) : 
-                        [];
+            // Most providers will use Google fallback, so handle Google format first
+            if (Array.isArray(data) && Array.isArray(data[1])) {
+                // Google-style format: [query, [suggestions...]]
+                suggestions = data[1];
+            } else if (Array.isArray(data)) {
+                // Handle other formats that might still be used
+                suggestions = data.map(s => {
+                    if (typeof s === 'string') return s;
+                    // Try common suggestion object properties
+                    return s.phrase || s.query || s.suggestion || s.text || '';
+                }).filter(s => s);
             }
-            log(`[OmniSeek] Parsed suggestions for ${p.name}: ${JSON.stringify(suggestions)}`);
-            return suggestions.slice(0, 5).map(s => JSON.stringify({
-                provider: p,
-                query: s,
-                sug: true
-            }));
         } catch (e) {
-            log(`[OmniSeek] Error fetching suggestions for ${p.name}: ${e}`);
-            return [];
+            log(`[OmniSeek] Error parsing suggestions for ${providerIcon}: ${e}`);
+            suggestions = [];
         }
+        
+        return suggestions.slice(0, 5);
     }
+
     getInitialResultSet(terms) {
-        const m = this._parse(terms);
-        if (!m) return [];
-        let ids = [JSON.stringify(m)];
-        // Synchronously fetch suggestions
-        if (m.provider.suggest) {
+        const match = this._parse(terms);
+        if (!match) return [];
+
+        let results = [JSON.stringify(match)];
+        
+        // Try to fetch suggestions synchronously
+        if (match.query.length > 0) {
             try {
-                const url = m.provider.suggest.replace('%s', urlencode(m.query));
-                const msg = Soup.Message.new('GET', url);
-                msg.request_headers.append('User-Agent', 'Mozilla/5.0');
-                msg.request_headers.append('Accept', 'application/json');
-                const bytes = session.send_and_read(msg, null);
-                const data = JSON.parse(bytes.get_data().toString());
-                let suggestions = [];
-                switch (m.provider.icon) {
-                    case 'google.svg':
-                    case 'youtube.svg':
-                    case 'ytmusic.svg':
-                        suggestions = Array.isArray(data) && Array.isArray(data[1]) ? data[1] : [];
-                        break;
-                    case 'brave.svg':
-                        suggestions = Array.isArray(data) ? data.map(s => s.query || s) : [];
-                        break;
-                    case 'duckduckgo.svg':
-                        suggestions = Array.isArray(data) ? data.map(s => s.phrase || s) : [];
-                        break;
-                    case 'wikipedia.svg':
-                        suggestions = Array.isArray(data) && Array.isArray(data[1]) ? data[1] : [];
-                        break;
-                    default:
-                        suggestions = Array.isArray(data) ? 
-                            (Array.isArray(data[1]) ? data[1] : 
-                                (data.map(s => typeof s === 'string' ? s : (s.phrase || s.query || s)))) : 
-                            [];
+                const cacheKey = `${match.provider.shortcut}:${match.query}`;
+                
+                // Check cache first
+                if (this._suggestionCache.has(cacheKey)) {
+                    const cachedSuggestions = this._suggestionCache.get(cacheKey);
+                    results = results.concat(cachedSuggestions);
+                } else {
+                    // Fetch suggestions synchronously
+                    const suggestUrl = this._getSuggestionUrl(match.provider, match.query);
+                    const msg = Soup.Message.new('GET', suggestUrl);
+                    msg.request_headers.append('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36');
+                    msg.request_headers.append('Accept', 'application/json');
+                    
+                    const bytes = session.send_and_read(msg, null);
+                    const responseText = bytes.get_data().toString();
+                    log(`[OmniSeek] Raw response for ${match.provider.name}: ${responseText.substring(0, 200)}...`);
+                    
+                    const data = JSON.parse(responseText);
+                    
+                    const suggestions = this._parseSuggestions(data, match.provider.icon);
+                    const suggestionResults = suggestions.map(s => JSON.stringify({
+                        provider: match.provider,
+                        query: s,
+                        suggestion: true
+                    }));
+                    
+                    // Cache the results
+                    this._suggestionCache.set(cacheKey, suggestionResults);
+                    
+                    results = results.concat(suggestionResults);
                 }
-                ids = ids.concat(suggestions.slice(0, 5).map(s => JSON.stringify({
-                    provider: m.provider,
-                    query: s,
-                    sug: true
-                })));
             } catch (e) {
-                log(`Error fetching suggestions synchronously: ${e}`);
+                log(`Error fetching suggestions for ${match.provider.name}: ${e}`);
             }
         }
-        return ids;
+        
+        return results;
     }
+
     getSubsearchResultSet(previous, terms) {
         return this.getInitialResultSet(terms);
     }
+
     getResultMetas(ids) {
         return ids.map(id => {
-            const o = JSON.parse(id);
-            const p = o.provider;
-            const isMedia = p.icon === 'spotify.svg' || p.icon === 'ytmusic.svg' || p.icon === 'youtube.svg';
-            const isSuggestion = o.sug === true;
+            const result = JSON.parse(id);
+            const provider = result.provider;
+            const isSuggestion = result.suggestion === true;
+            
+            // Determine icon
             let icon;
             try {
-                const iconPath = GLib.build_filenamev([this._iconsDir, p.icon]);
+                const iconPath = GLib.build_filenamev([this._iconsDir, provider.icon]);
                 if (GLib.file_test(iconPath, GLib.FileTest.EXISTS)) {
                     icon = Gio.FileIcon.new(Gio.File.new_for_path(iconPath));
                 } else {
-                    icon = new Gio.ThemedIcon({ name: isMedia ? 'multimedia-player-symbolic' : 'system-search-symbolic' });
-                }
-            } catch (e) {
-                log(`Error loading icon for ${p.name}: ${e}`);
-                icon = new Gio.ThemedIcon({ name: isMedia ? 'multimedia-player-symbolic' : 'system-search-symbolic' });
-            }
-
-            // For media services, try to fetch a thumbnail
-            if (isMedia && isSuggestion) {
-                const thumbnailPromise = this._getThumbnailUrl(p, o.query);
-                if (thumbnailPromise) {
-                    thumbnailPromise.then(thumbnailUrl => {
-                        if (thumbnailUrl) {
-                            fetchThumbnail(thumbnailUrl).then(thumbIcon => {
-                                if (thumbIcon) {
-                                    icon = thumbIcon;
-                                    Main.overview.searchController.invalidate();
-                                }
-                            });
-                        }
+                    // Fallback to themed icon
+                    const isMedia = ['spotify.svg', 'ytmusic.svg', 'youtube.svg'].includes(provider.icon);
+                    icon = new Gio.ThemedIcon({ 
+                        name: isMedia ? 'multimedia-player-symbolic' : 'system-search-symbolic' 
                     });
                 }
+            } catch (e) {
+                log(`Error loading icon for ${provider.name}: ${e}`);
+                const isMedia = ['spotify.svg', 'ytmusic.svg', 'youtube.svg'].includes(provider.icon);
+                icon = new Gio.ThemedIcon({ 
+                    name: isMedia ? 'multimedia-player-symbolic' : 'system-search-symbolic' 
+                });
             }
 
-            const displayName = isSuggestion ? o.query : `Search "${o.query}"`;
+            // Create display text
+            const displayName = isSuggestion ? result.query : `Search "${result.query}"`;
             const description = isSuggestion ? 
-                (isMedia ? `Play on ${p.name}` : `Search suggestion for ${p.name}`) : 
-                `Search on ${p.name}`;
+                `Search suggestion for ${provider.name}` : 
+                `Search on ${provider.name}`;
+
             return {
                 id,
                 name: displayName,
@@ -243,81 +205,12 @@ class OmniProvider {
         });
     }
 
-    _getThumbnailUrl(provider, query) {
-        const apiKeys = this._settings.get_value('api-keys').deep_unpack();
-
-        if (provider.icon === 'spotify.svg') {
-            const apiKey = apiKeys['spotify'];
-            if (!apiKey) {
-                return null;
-            }
-
-            // For Spotify, we need to search first to get the track/album ID
-            const searchUrl = `https://api.spotify.com/v1/search?q=${urlencode(query)}&type=track&limit=1`;
-            return new Promise(resolve => {
-                const msg = Soup.Message.new('GET', searchUrl);
-                msg.request_headers.append('User-Agent', 'Mozilla/5.0');
-                msg.request_headers.append('Accept', 'application/json');
-                msg.request_headers.append('Authorization', `Bearer ${apiKey}`);
-                session.send_and_read_async(msg, 10000, null, (sess, res) => {
-                    try {
-                        const data = JSON.parse(sess.send_and_read_finish(res).get_data().toString());
-                        if (data.tracks && data.tracks.items && data.tracks.items.length > 0) {
-                            const track = data.tracks.items[0];
-                            if (track.album && track.album.images && track.album.images.length > 0) {
-                                resolve(track.album.images[0].url);
-                            } else {
-                                resolve(null);
-                            }
-                        } else {
-                            resolve(null);
-                        }
-                    } catch (e) {
-                        log(`Error fetching Spotify thumbnail: ${e}`);
-                        resolve(null);
-                    }
-                });
-            });
-        } else if (provider.icon === 'youtube.svg' || provider.icon === 'ytmusic.svg') {
-            const apiKey = apiKeys['youtube'];
-            if (!apiKey) {
-                return null;
-            }
-
-            // For YouTube, search for the video
-            const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${urlencode(query)}&type=video&maxResults=1&key=${apiKey}`;
-            return new Promise(resolve => {
-                const msg = Soup.Message.new('GET', searchUrl);
-                msg.request_headers.append('User-Agent', 'Mozilla/5.0');
-                msg.request_headers.append('Accept', 'application/json');
-                session.send_and_read_async(msg, 10000, null, (sess, res) => {
-                    try {
-                        const data = JSON.parse(sess.send_and_read_finish(res).get_data().toString());
-                        if (data.items && data.items.length > 0) {
-                            const video = data.items[0];
-                            if (video.snippet && video.snippet.thumbnails && video.snippet.thumbnails.high) {
-                                resolve(video.snippet.thumbnails.high.url);
-                            } else {
-                                resolve(null);
-                            }
-                        } else {
-                            resolve(null);
-                        }
-                    } catch (e) {
-                        log(`Error fetching YouTube thumbnail: ${e}`);
-                        resolve(null);
-                    }
-                });
-            });
-        }
-        return null;
-    }
-
     activateResult(id, terms, timestamp) {
-        const o = JSON.parse(id);
-        const url = o.provider.url.replace('%s', urlencode(o.query));
+        const result = JSON.parse(id);
+        const url = result.provider.url.replace('%s', urlencode(result.query));
         Gio.AppInfo.launch_default_for_uri(url, null);
     }
+
     filterResults(results, max) {
         return results.slice(0, max);
     }
@@ -326,18 +219,31 @@ class OmniProvider {
 export default class OmniSeekExtension {
     enable() {
         this._settings = getSettings(import.meta.url);
-        const iconsDir = GLib.build_filenamev([GLib.path_get_dirname(import.meta.url.replace('file://','')), 'icons']);
+        const iconsDir = GLib.build_filenamev([
+            GLib.path_get_dirname(import.meta.url.replace('file://', '')), 
+            'icons'
+        ]);
         this._provider = new OmniProvider(this._settings, iconsDir);
         Main.overview.searchController.addProvider(this._provider);
-        this._signal = this._settings.connect('changed::providers-json', () => this._provider.reload());
+        this._signal = this._settings.connect('changed::providers-json', () => {
+            this._provider.reload();
+        });
     }
+
     disable() {
-        if (this._provider) Main.overview.searchController.removeProvider(this._provider);
-        if (this._settings && this._signal) this._settings.disconnect(this._signal);
+        if (this._provider) {
+            Main.overview.searchController.removeProvider(this._provider);
+            this._provider = null;
+        }
+        if (this._settings && this._signal) {
+            this._settings.disconnect(this._signal);
+            this._signal = null;
+        }
+        this._settings = null;
     }
 }
 
-// Fallback for log if not defined (for debugging outside GNOME Shell)
+// Fallback for log if not defined
 if (typeof log !== 'function') {
-    var log = print;
+    globalThis.log = console.log;
 }

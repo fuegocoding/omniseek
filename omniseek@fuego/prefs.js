@@ -26,7 +26,32 @@ function getSettings(url) {
 export default class OmniSeekPrefs {
     fillPreferencesWindow(win) {
         const settings = getSettings(import.meta.url);
-        let providers = JSON.parse(settings.get_string('providers-json'));
+        let providers;
+        
+        try {
+            providers = JSON.parse(settings.get_string('providers-json'));
+            
+            // Check if we need to update to include new providers
+            const expectedProviders = [
+                'Google', 'Brave Search', 'DuckDuckGo', 'Bing', 'YouTube', 
+                'YouTube Music', 'Wikipedia', 'ChatGPT', 
+                'Reddit', 'Spotify', 'Startpage', 'Qwant'
+            ];
+            
+            const currentProviderNames = providers.map(p => p.name);
+            const missingProviders = expectedProviders.filter(name => 
+                !currentProviderNames.includes(name)
+            );
+            
+            // If we're missing new providers, reset to defaults
+            if (missingProviders.length > 0) {
+                console.log(`Missing providers detected: ${missingProviders.join(', ')}, resetting to defaults`);
+                providers = null; // Force reload of defaults
+            }
+        } catch (e) {
+            console.log(`Error parsing providers, resetting to defaults: ${e}`);
+            providers = null;
+        }
 
         // Create main page
         const page = new Adw.PreferencesPage({
@@ -77,48 +102,8 @@ export default class OmniSeekPrefs {
 
         page.add(providersGroup);
 
-        // Create a GObject class for our provider items
-        const ProviderObject = GObject.registerClass({
-            Properties: {
-                'name': GObject.ParamSpec.string(
-                    'name', 'name', 'Provider name',
-                    GObject.ParamFlags.READWRITE,
-                    ''
-                ),
-                'shortcut': GObject.ParamSpec.string(
-                    'shortcut', 'shortcut', 'Provider shortcut',
-                    GObject.ParamFlags.READWRITE,
-                    ''
-                ),
-                'url': GObject.ParamSpec.string(
-                    'url', 'url', 'Search URL',
-                    GObject.ParamFlags.READWRITE,
-                    ''
-                ),
-                'suggest': GObject.ParamSpec.string(
-                    'suggest', 'suggest', 'Suggestions URL',
-                    GObject.ParamFlags.READWRITE,
-                    ''
-                ),
-                'icon': GObject.ParamSpec.string(
-                    'icon', 'icon', 'Provider icon',
-                    GObject.ParamFlags.READWRITE,
-                    ''
-                )
-            }
-        }, class ProviderObject extends GObject.Object {
-            _init(params) {
-                super._init();
-                this.name = params.name || '';
-                this.shortcut = params.shortcut || '';
-                this.url = params.url || '';
-                this.suggest = params.suggest || '';
-                this.icon = params.icon || '';
-            }
-        });
-
-        // Create the list store with our providers
-        const store = new Gio.ListStore({ item_type: ProviderObject });
+        // Create the list store - use simple object store instead of GObject
+        const store = new Gio.ListStore({ item_type: GObject.Object });
         
         // If providers is empty, load defaults
         if (!providers || !providers.length) {
@@ -134,15 +119,22 @@ export default class OmniSeekPrefs {
                     name: 'Brave Search',
                     shortcut: 'br',
                     url: 'https://search.brave.com/search?q=%s',
-                    suggest: 'https://search.brave.com/api/suggest?q=%s',
+                    suggest: '', // Force Google fallback
                     icon: 'brave.svg'
                 },
                 {
                     name: 'DuckDuckGo',
                     shortcut: 'ddg',
                     url: 'https://duckduckgo.com/?q=%s',
-                    suggest: 'https://duckduckgo.com/ac/?q=%s&type=list',
+                    suggest: '', // Force Google fallback
                     icon: 'duckduckgo.svg'
+                },
+                {
+                    name: 'Bing',
+                    shortcut: 'b',
+                    url: 'https://www.bing.com/search?q=%s',
+                    suggest: 'https://api.bing.com/osjson.aspx?query=%s',
+                    icon: 'bing.svg'
                 },
                 {
                     name: 'YouTube',
@@ -152,24 +144,69 @@ export default class OmniSeekPrefs {
                     icon: 'youtube.svg'
                 },
                 {
+                    name: 'YouTube Music',
+                    shortcut: 'ym',
+                    url: 'https://music.youtube.com/search?q=%s',
+                    suggest: 'https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=%s',
+                    icon: 'ytmusic.svg'
+                },
+                {
                     name: 'Wikipedia',
                     shortcut: 'w',
                     url: 'https://en.wikipedia.org/wiki/Special:Search/%s',
                     suggest: 'https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=%s',
                     icon: 'wikipedia.svg'
+                },
+                {
+                    name: 'ChatGPT',
+                    shortcut: 'gpt',
+                    url: 'https://chat.openai.com/?q=%s',
+                    suggest: '',
+                    icon: 'chatgpt.svg'
+                },
+                {
+                    name: 'Reddit',
+                    shortcut: 'r',
+                    url: 'https://www.reddit.com/search/?q=%s',
+                    suggest: '',
+                    icon: 'reddit.svg'
+                },
+                {
+                    name: 'Spotify',
+                    shortcut: 's',
+                    url: 'https://open.spotify.com/search/%s',
+                    suggest: '',
+                    icon: 'spotify.svg'
+                },
+                {
+                    name: 'Startpage',
+                    shortcut: 'sp',
+                    url: 'https://www.startpage.com/search?q=%s',
+                    suggest: '',
+                    icon: 'startpage.svg'
+                },
+                {
+                    name: 'Qwant',
+                    shortcut: 'q',
+                    url: 'https://www.qwant.com/?q=%s',
+                    suggest: '',
+                    icon: 'qwant.svg'
                 }
             ];
             settings.set_string('providers-json', JSON.stringify(providers));
         }
 
         providers.forEach(p => {
-            store.append(new ProviderObject({
+            // Create simple GObject with provider data
+            const obj = new GObject.Object();
+            obj.providerData = {
                 name: p.name || '',
                 shortcut: p.shortcut || '',
                 url: p.url || '',
                 suggest: p.suggest || '',
                 icon: p.icon || ''
-            }));
+            };
+            store.append(obj);
         });
 
         // Create the list factory
@@ -194,9 +231,9 @@ export default class OmniSeekPrefs {
             });
 
             const shortcutEntry = new Gtk.Entry({
-                width_chars: 3,
-                max_width_chars: 3,
-                placeholder_text: 'Key',
+                width_chars: 4,
+                max_width_chars: 10,
+                placeholder_text: 'Shortcut',
                 margin_end: 12,
                 valign: Gtk.Align.CENTER
             });
@@ -236,16 +273,18 @@ export default class OmniSeekPrefs {
             });
 
             const suggestEntry = new Gtk.Entry({
-                placeholder_text: 'Suggestions URL (optional)',
+                placeholder_text: 'Suggestions URL (optional - will use Google as fallback)',
                 hexpand: true
             });
 
             urlBox.append(urlEntry);
             urlBox.append(suggestEntry);
-            row.add_row(new Adw.ActionRow({
-                title: 'Advanced Settings',
-                child: urlBox
-            }));
+            
+            const advancedRow = new Adw.ActionRow({
+                title: 'Advanced Settings'
+            });
+            advancedRow.set_child(urlBox);
+            row.add_row(advancedRow);
 
             // Store widgets as properties of the row for easy access in bind
             row.shortcutEntry = shortcutEntry;
@@ -256,58 +295,74 @@ export default class OmniSeekPrefs {
         });
 
         factory.connect('bind', (_, listItem) => {
-            const o = providers[listItem.get_position()];
+            const index = listItem.get_position();
+            const obj = store.get_item(index);
+            const provider = obj.providerData;
             const row = listItem.get_child();
             
             // Set the title and values
-            row.nameEntry.set_text(o.name || '');
-            row.shortcutEntry.set_text(o.shortcut || '');
-            row.urlEntry.set_text(o.url || '');
-            row.suggestEntry.set_text(o.suggest || '');
-            row.set_title(o.name || 'Unnamed Provider');
-            row.set_subtitle(o.shortcut ? 
-                `Type "${o.shortcut}" to search` : 
+            row.nameEntry.set_text(provider.name || '');
+            row.shortcutEntry.set_text(provider.shortcut || '');
+            row.urlEntry.set_text(provider.url || '');
+            row.suggestEntry.set_text(provider.suggest || '');
+            row.set_title(provider.name || 'Unnamed Provider');
+            row.set_subtitle(provider.shortcut ? 
+                `Type "${provider.shortcut}" to search` : 
                 'No shortcut set'
             );
 
             // Set icon if available
-            if (o.icon) {
-                const iconPath = GLib.build_filenamev([GLib.path_get_dirname(import.meta.url.replace('file://', '')), 'icons', o.icon]);
+            if (provider.icon) {
+                const iconPath = GLib.build_filenamev([
+                    GLib.path_get_dirname(import.meta.url.replace('file://', '')), 
+                    'icons', 
+                    provider.icon
+                ]);
                 if (GLib.file_test(iconPath, GLib.FileTest.EXISTS)) {
-                    row.set_icon_name(o.icon.replace('.svg', ''));
+                    row.set_icon_name(provider.icon.replace('.svg', ''));
                 }
             }
 
-            // Handle changes
+            // Handle changes with proper debouncing
             let timeout = null;
             const saveChanges = () => {
-                // Update the provider object
-                o.name = row.nameEntry.get_text();
-                o.shortcut = row.shortcutEntry.get_text();
-                o.url = row.urlEntry.get_text();
-                o.suggest = row.suggestEntry.get_text();
-                
-                // Update the row display
-                row.set_title(o.name || 'Unnamed Provider');
-                row.set_subtitle(o.shortcut ? 
-                    `Type "${o.shortcut}" to search` : 
-                    'No shortcut set'
-                );
+                const currentIndex = listItem.get_position();
+                if (currentIndex >= 0 && currentIndex < providers.length) {
+                    // Update the provider object and the store
+                    providers[currentIndex].name = row.nameEntry.get_text();
+                    providers[currentIndex].shortcut = row.shortcutEntry.get_text();
+                    providers[currentIndex].url = row.urlEntry.get_text();
+                    providers[currentIndex].suggest = row.suggestEntry.get_text();
+                    
+                    // Update the store object
+                    const obj = store.get_item(currentIndex);
+                    obj.providerData = {
+                        name: providers[currentIndex].name,
+                        shortcut: providers[currentIndex].shortcut,
+                        url: providers[currentIndex].url,
+                        suggest: providers[currentIndex].suggest,
+                        icon: providers[currentIndex].icon
+                    };
+                    
+                    // Update the row display
+                    const newName = providers[currentIndex].name || 'Unnamed Provider';
+                    const newShortcut = providers[currentIndex].shortcut;
+                    
+                    row.set_title(newName);
+                    row.set_subtitle(newShortcut ? 
+                        `Type "${newShortcut}" to search` : 
+                        'No shortcut set'
+                    );
 
-                // Update the providers array and save to settings
-                const index = listItem.get_position();
-                providers[index] = {
-                    name: o.name,
-                    shortcut: o.shortcut,
-                    url: o.url,
-                    suggest: o.suggest,
-                    icon: o.icon
-                };
-                settings.set_string('providers-json', JSON.stringify(providers));
+                    // Save to settings and trigger extension reload
+                    settings.set_string('providers-json', JSON.stringify(providers));
+                }
             };
 
             const saveProvider = () => {
-                if (timeout) GLib.source_remove(timeout);
+                if (timeout) {
+                    GLib.source_remove(timeout);
+                }
                 timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
                     saveChanges();
                     timeout = null;
@@ -322,10 +377,12 @@ export default class OmniSeekPrefs {
 
             // Setup delete button
             row.deleteButton.connect('clicked', () => {
-                const index = listItem.get_position();
-                providers.splice(index, 1);
-                settings.set_string('providers-json', JSON.stringify(providers));
-                store.remove(index);
+                const currentIndex = listItem.get_position();
+                if (currentIndex >= 0 && currentIndex < providers.length) {
+                    providers.splice(currentIndex, 1);
+                    settings.set_string('providers-json', JSON.stringify(providers));
+                    store.remove(currentIndex);
+                }
             });
         });
 
@@ -343,6 +400,23 @@ export default class OmniSeekPrefs {
                 css_classes: ['navigation-sidebar']
             });
 
+            const updateButtons = () => {
+                const rows = [];
+                let child = listBox.get_first_child();
+                while (child) {
+                    rows.push(child);
+                    child = child.get_next_sibling();
+                }
+                
+                rows.forEach((row, index) => {
+                    const box = row.get_child();
+                    const upButton = box.get_last_child().get_prev_sibling();
+                    const downButton = box.get_last_child();
+                    upButton.set_sensitive(index > 0);
+                    downButton.set_sensitive(index < rows.length - 1);
+                });
+            };
+
             providers.forEach((provider, index) => {
                 const row = new Gtk.ListBoxRow();
                 const box = new Gtk.Box({
@@ -355,7 +429,7 @@ export default class OmniSeekPrefs {
                 });
 
                 const label = new Gtk.Label({
-                    label: provider.name,
+                    label: `${provider.shortcut}: ${provider.name}`,
                     hexpand: true,
                     xalign: 0
                 });
@@ -378,25 +452,41 @@ export default class OmniSeekPrefs {
                 row.set_child(box);
 
                 upButton.connect('clicked', () => {
-                    if (index > 0) {
-                        [providers[index], providers[index - 1]] = [providers[index - 1], providers[index]];
+                    const currentIndex = [...listBox].indexOf(row);
+                    if (currentIndex > 0) {
+                        // Swap in providers array
+                        [providers[currentIndex], providers[currentIndex - 1]] = 
+                        [providers[currentIndex - 1], providers[currentIndex]];
+                        
+                        // Move in UI
                         listBox.remove(row);
-                        listBox.insert(row, index - 1);
+                        listBox.insert(row, currentIndex - 1);
+                        
                         settings.set_string('providers-json', JSON.stringify(providers));
+                        updateButtons();
                     }
                 });
 
                 downButton.connect('clicked', () => {
-                    if (index < providers.length - 1) {
-                        [providers[index], providers[index + 1]] = [providers[index + 1], providers[index]];
+                    const currentIndex = [...listBox].indexOf(row);
+                    if (currentIndex < providers.length - 1) {
+                        // Swap in providers array
+                        [providers[currentIndex], providers[currentIndex + 1]] = 
+                        [providers[currentIndex + 1], providers[currentIndex]];
+                        
+                        // Move in UI
                         listBox.remove(row);
-                        listBox.insert(row, index + 1);
+                        listBox.insert(row, currentIndex + 1);
+                        
                         settings.set_string('providers-json', JSON.stringify(providers));
+                        updateButtons();
                     }
                 });
 
                 listBox.append(row);
             });
+
+            updateButtons();
 
             const scrolled = new Gtk.ScrolledWindow({
                 hexpand: true,
@@ -409,20 +499,37 @@ export default class OmniSeekPrefs {
             dialog.add_response('close', 'Close');
             dialog.set_default_response('close');
             dialog.present();
-            });
+        });
 
-            // Setup add button handler
-            addButton.connect('clicked', () => {
-                const newProvider = {
-                    name: 'New Provider',
-                    shortcut: 'new',
-                    url: 'https://example.com/search?q=%s',
-                    suggest: '',
-                    icon: 'system-search-symbolic.svg'
-                };
-                providers.push(newProvider);
-                settings.set_string('providers-json', JSON.stringify(providers));
-                store.append(new ProviderObject(newProvider));
+        // Setup add button handler
+        addButton.connect('clicked', () => {
+            const newProvider = {
+                name: 'New Provider',
+                shortcut: 'new',
+                url: 'https://example.com/search?q=%s',
+                suggest: '',
+                icon: 'system-search-symbolic.svg'
+            };
+            providers.push(newProvider);
+            settings.set_string('providers-json', JSON.stringify(providers));
+            
+            // Add to store
+            const obj = new GObject.Object();
+            obj.providerData = {
+                name: newProvider.name,
+                shortcut: newProvider.shortcut,
+                url: newProvider.url,
+                suggest: newProvider.suggest,
+                icon: newProvider.icon
+            };
+            store.append(obj);
+            
+            // Scroll to the new item
+            const scrolled = providersGroup.get_first_child().get_next_sibling();
+            if (scrolled && scrolled.get_vadjustment) {
+                const adj = scrolled.get_vadjustment();
+                adj.set_value(adj.get_upper() - adj.get_page_size());
+            }
         });
 
         // Create selection model and list view
@@ -443,71 +550,24 @@ export default class OmniSeekPrefs {
         scrolled.set_child(listView);
         providersGroup.add(scrolled);
 
-        // Add help text
-        const helpGroup = new Adw.PreferencesGroup();
+        // Add help section
+        const helpGroup = new Adw.PreferencesGroup({
+            title: 'Help & Tips'
+        });
         page.add(helpGroup);
         
         const helpRow = new Adw.ActionRow({
-            title: 'How to use shortcuts',
-            subtitle: 'Type a provider\'s shortcut followed by your search query. For example: "g linux" to search Google for "linux".',
+            title: 'Using Search Shortcuts',
+            subtitle: 'Type a provider\'s shortcut followed by your search query. Example: "g linux" searches Google for "linux".',
             icon_name: 'help-about-symbolic'
         });
         helpGroup.add(helpRow);
 
-        // Add API keys group
-        const apiGroup = new Adw.PreferencesGroup({
-            title: 'API Keys (Optional)',
-            description: 'Configure API keys to enable enhanced features like thumbnails. These are optional and the extension will work without them.'
+        const suggestionsRow = new Adw.ActionRow({
+            title: 'Live Search Suggestions',
+            subtitle: 'Providers without suggestion URLs will automatically use Google suggestions as fallback.',
+            icon_name: 'system-search-symbolic'
         });
-        page.add(apiGroup);
-
-        // API key configuration
-        const apiKeys = settings.get_value('api-keys').deep_unpack();
-        const apiConfigs = [
-            {
-                id: 'spotify',
-                name: 'Spotify',
-                description: 'Enables album/track thumbnails in search results',
-                help: '1. Go to https://developer.spotify.com/dashboard\n2. Log in and create a new application\n3. Copy the Client ID'
-            },
-            {
-                id: 'youtube',
-                name: 'YouTube',
-                description: 'Enables video thumbnails in search results',
-                help: '1. Go to https://console.cloud.google.com\n2. Create a project and enable YouTube Data API\n3. Create credentials and copy the API key'
-            }
-        ];
-
-        apiConfigs.forEach(config => {
-            const row = new Adw.ActionRow({
-                title: config.name,
-                subtitle: config.description
-            });
-            apiGroup.add(row);
-
-            const keyEntry = new Gtk.Entry({
-                hexpand: true,
-                placeholder_text: `Enter your ${config.name} API key`,
-                visibility: false
-            });
-            keyEntry.set_text(apiKeys[config.id] || '');
-            keyEntry.connect('changed', () => {
-                const currentKeys = settings.get_value('api-keys').deep_unpack();
-                if (keyEntry.get_text()) {
-                    currentKeys[config.id] = keyEntry.get_text();
-                } else {
-                    delete currentKeys[config.id];
-                }
-                settings.set_value('api-keys', new GLib.Variant('a{ss}', currentKeys));
-            });
-            row.add_suffix(keyEntry);
-
-            const helpRow = new Adw.ActionRow({
-                title: `How to get a ${config.name} API key`,
-                subtitle: config.help,
-                icon_name: 'help-about-symbolic'
-            });
-            apiGroup.add(helpRow);
-        });
+        helpGroup.add(suggestionsRow);
     }
 }
